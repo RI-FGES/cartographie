@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="Cartographie_RI_2026.css" />
 
     <style>
+    
     #toolbar {
     position: fixed;
     top: 20px; left: 20px;
@@ -103,6 +104,117 @@
     .filter-btn.active.erasmus  { background: var(--blue);   color: white; border-color: var(--blue); }
     .filter-btn.active.hors-era { background: var(--red);    color: white; border-color: var(--red); }
     .filter-btn.active.monde    { background: var(--green);  color: white; border-color: var(--green); }
+
+    /* ── INFO BUTTON ── */
+#info-btn {
+    width: 36px; height: 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+    flex-shrink: 0;
+}
+#info-btn:hover { background: var(--text-1); color: white; }
+
+/* ── INFO MODAL ── */
+#info-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+}
+#info-overlay.open {
+    display: flex;
+}
+#info-modal {
+    background: var(--surface);
+    border-radius: 20px;
+    padding: 36px;
+    max-width: 480px;
+    width: calc(100% - 40px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    position: relative;
+}
+#info-modal h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 14px;
+}
+#info-modal p {
+    font-size: 13.5px;
+    color: var(--text-2);
+    line-height: 1.7;
+}
+#info-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all .2s;
+}
+#info-close:hover { background: #f3f4f6; color: var(--text-1); }
+    
+@media (max-width: 640px) {
+    #toolbar {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        max-width: calc(100vw - 20px);
+    }
+    #search-input {
+        width: 100%;
+        font-size: 14px;
+    }
+    .filter-btn {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    #panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        height: 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.12);
+        transition: height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #panel.open {
+        height: 75vh;
+    }
+    #panel-inner {
+        width: 100%;
+        padding: 24px 20px 40px;
+        transform: translateY(20px);
+    }
+    #panel.open #panel-inner {
+        transform: translateY(0);
+    }
+    .panel-title {
+        font-size: 20px;
+    }
+}
+
     </style>
 </head>
 <body>
@@ -111,6 +223,17 @@
 
 <!-- Tool bar -->
     <div id="toolbar">
+
+<!-- Bouton info -->
+<button id="info-btn" onclick="document.getElementById('info-overlay').classList.add('open')">i</button>
+<div id="info-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+    <div id="info-modal">
+        <button id="info-close" onclick="document.getElementById('info-overlay').classList.remove('open')">✕ Fermer</button>
+        <h3>À propos de cette carte</h3>
+        <p>Cette cartographie a été élaborée à partir des questionnaires de retour d'expérience complétés par les étudiants de la FGES ayant effectué un séjour à l'étranger. Elle reflète les destinations pour lesquelles des retours ont été collectés et ne constitue pas la liste exhaustive des partenariats universitaires de la FGES. Certaines destinations ne figurent pas encore sur cette carte, notamment les universités partenaires récemment intégrées ou celles pour lesquelles aucun questionnaire n'a encore été transmis. Pour connaître l'ensemble des destinations disponibles, nous vous invitons à consulter le cours "Échanges internationaux" sur iCampus.</p>
+    </div>
+</div>
+
     <div id="search-wrap">
         <span id="search-icon">🔍</span>
         <input id="search-input" type="text" placeholder="Rechercher une université ou un pays…" autocomplete="off" />
