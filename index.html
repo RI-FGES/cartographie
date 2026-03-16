@@ -1704,13 +1704,22 @@ function showPanel(uni) {
         </div>
     `;
 
+    if (window.innerWidth <= 640) {
+    panel.style.width = '100%';
+    panel.style.height = '75vh';
+} else {
     panel.style.width = '440px';
-    panel.classList.add('open');
+    panel.style.height = '100%';
+}
+panel.classList.add('open');
 }
 
 function closePanel() {
     panel.classList.remove('open');
-    setTimeout(() => { panel.style.width = '0'; }, 450);
+    setTimeout(() => {
+        panel.style.width = '0';
+        panel.style.height = '0';
+    }, 450);
     map.flyTo(initialView.coords, initialView.zoom, { duration: 1.2 });
 }
 
