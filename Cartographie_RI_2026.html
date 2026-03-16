@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartographie RI 2026</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="Cartographie_RI_2026.css" />
+
+    <style>
+    #toolbar {
+    position: fixed;
+    top: 20px; left: 20px;
+    z-index: 900;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    }
+    #counter {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        font-size: 13px;
+        color: var(--text-2);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    #counter span { font-weight: 600; font-size: 15px; }
+    #search-wrap { position: relative; }
+    #search-input {
+        width: 300px;
+        padding: 10px 16px 10px 38px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px;
+        color: var(--text-1);
+        outline: none;
+        transition: box-shadow .2s, border-color .2s;
+    }
+    #search-input::placeholder { color: var(--text-3); }
+    #search-input:focus {
+        border-color: #93C5FD;
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+    #search-icon {
+        position: absolute;
+        left: 12px; top: 50%;
+        transform: translateY(-50%);
+        font-size: 14px;
+        pointer-events: none;
+    }
+    #search-results {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px); left: 0;
+        width: 300px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        overflow: hidden;
+        max-height: 260px;
+        overflow-y: auto;
+    }
+    .search-item {
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-1);
+        border-bottom: 1px solid #f3f4f6;
+        transition: background .15s;
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: #f9fafb; }
+    .search-item-pays { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    #filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filter-btn {
+        padding: 7px 14px;
+        border-radius: 99px;
+        border: 1.5px solid transparent;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .2s;
+        background: var(--surface);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .filter-btn.all      { color: var(--text-2); border-color: var(--border); }
+    .filter-btn.erasmus  { color: var(--blue);   border-color: #BFDBFE; }
+    .filter-btn.hors-era { color: var(--red);    border-color: #FECACA; }
+    .filter-btn.monde    { color: var(--green);  border-color: #BBF7D0; }
+    .filter-btn.active.all      { background: var(--text-1); color: white; border-color: var(--text-1); }
+    .filter-btn.active.erasmus  { background: var(--blue);   color: white; border-color: var(--blue); }
+    .filter-btn.active.hors-era { background: var(--red);    color: white; border-color: var(--red); }
+    .filter-btn.active.monde    { background: var(--green);  color: white; border-color: var(--green); }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Tool bar -->
+    <div id="toolbar">
+    <div id="search-wrap">
+        <span id="search-icon">🔍</span>
+        <input id="search-input" type="text" placeholder="Rechercher une université ou un pays…" autocomplete="off" />
+        <div id="search-results"></div>
+    </div>
+    <div id="filters">
+    <button class="filter-btn all active"  onclick="setFilter('all')">Tout (<span id="count-total">0</span>)</button>
+    <button class="filter-btn erasmus"     onclick="setFilter('europe-erasmus')">Europe – Erasmus (<span id="count-erasmus">0</span>)</button>
+    <button class="filter-btn hors-era"    onclick="setFilter('europe-hors-erasmus')">Europe – Hors Erasmus (<span id="count-hors">0</span>)</button>
+    <button class="filter-btn monde"       onclick="setFilter('hors-europe')">Hors Europe (<span id="count-monde">0</span>)</button>
+</div>
+</div>
+
+<!-- Side panel -->
+<div id="panel">
+    <div id="panel-inner">
+        <button id="close-btn" onclick="closePanel()">← Fermer</button>
+        <div id="content"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ─────────────────────────────────────────────
+   DONNÉES – ajoute autant d'objets que tu veux
+   Types : "europe-erasmus" | "europe-hors-erasmus" | "hors-europe"
+───────────────────────────────────────────── */
+const universites = [
+    {
+        nom: "Augsburg – Hochschule Augsburg",
+        pays: "Allemagne",
+        coords: [48.35552694661619, 10.904528148877482],
+        type: "europe-erasmus",
+        code: "D AUGSBUR02",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Bayreuth – Universitat Bayreuth",
+        pays: "Allemagne",
+        coords: [49.92643811465807, 11.585248895104833],
+        type: "europe-erasmus",
+        code: "D BAYREUT01",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Berlin – Freie Universitat Berlin",
+        pays: "Allemagne",
+        coords: [52.445153574559306, 13.23619592296127],
+        type: "europe-erasmus",
+        code: "D BERLIN01",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Cologne – Technische Hochschule Koln",
+        pays: "Allemagne",
+        coords: [50.93885669013234, 6.961507267380379],
+        type: "europe-erasmus",
+        code: "D KOLN04",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Erfurt – Universitat Erfurt",
+        pays: "Allemagne",
+        coords: [50.99189262628728, 11.010890320167787],
+        type: "europe-erasmus",
+        code: "D ERFURT05",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Munich – LMU Munich",
+        pays: "Allemagne",
+        coords: [48.15109744884478, 11.579876993253796],
+        type: "europe-erasmus",
+        code: "???????",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Munster – Universitat Munster, School of Business and Economics",
+        pays: "Allemagne",
+        coords: [51.962012184635775, 7.619699877910343],
+        type: "europe-erasmus",
+        code: "D MUNSTER01",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Anvers – Universitat Antwerpen",
+        pays: "Belgique",
+        coords: [51.22296194595281, 4.410169262566893],
+        type: "europe-erasmus",
+        code: "B ANTWERP01",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Bruxelles – Saint-Louis Bruxelles",
+        pays: "Belgique",
+        coords: [50.85307138465338, 4.360249404895168],
+        type: "europe-erasmus",
+        code: "B BRUXEL02",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Bruxelles Louvain – KU Leuven",
+        pays: "Belgique",
+        coords: [50.878239261374596, 4.699710664417942],
+        type: "europe-erasmus",
+        code: "B LEUVEN01",
+        verdict: "",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Blagoevgrad – American University in Bulgaria (AUBG)",
+        pays: "Bulgarie",
+        coords: [42.03127294992846, 23.088552185399553],
+        type: "europe-erasmus",
+        code: "BG BLAGOEV03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Sofia – Saint Kliment Ohridski",
+        pays: "Bulgarie",
+        coords: [42.69370699817814, 23.33490844907447],
+        type: "europe-erasmus",
+        code: "BG SOFIA06",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Paphos – Neapolis University Pafos",
+        pays: "Chypre",
+        coords: [34.749359246256674, 32.42708882208965],
+        type: "europe-erasmus",
+        code: "CY PAFOS01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Split – University of Split",
+        pays: "Croatie",
+        coords: [43.51125064362254, 16.46806932023862],
+        type: "europe-erasmus",
+        code: "HR SPLIT01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Zagreb – VERN University",
+        pays: "Croatie",
+        coords: [45.806056558315284, 15.981929306746206],
+        type: "europe-erasmus",
+        code: "HR ZAGREB10",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Odense – University of Southern Denmark (SDU)",
+        pays: "Danemark",
+        coords: [55.406425445511026, 10.418623352779925],
+        type: "europe-erasmus",
+        code: "DK ODENSE01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Barcelone – ESCI-UPF",
+        pays: "Espagne",
+        coords: [41.38835108398073, 2.1820737374331065],
+        type: "europe-erasmus",
+        code: "E BARCELO258",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Barcelone – Universitat de Girona – EU Mediterrani (EUM)",
+        pays: "Espagne",
+        coords: [41.405131648702806, 2.161952726645673],
+        type: "europe-erasmus",
+        code: "E GIRONA02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Barcelone – Universitat Ramon Llull (IQS)",
+        pays: "Espagne",
+        coords: [41.403308353520565, 2.119669420238618],
+        type: "europe-erasmus",
+        code: "?????????",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Cordoue – Universidad Loyola",
+        pays: "Espagne",
+        coords: [37.89003956151984, -4.781289479075204],
+        type: "europe-erasmus",
+        code: "E CORDOBA23",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "La Corogne – Universidade da Coruna",
+        pays: "Espagne",
+        coords: [43.33660592274439, -8.409536062659745],
+        type: "europe-erasmus",
+        code: "E LA-CORU01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid – CEU San Pablo",
+        pays: "Espagne",
+        coords: [40.44275123527397, -3.717295491402756],
+        type: "europe-erasmus",
+        code: "E MADRID21",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid – Colegio Universitario de Estudios Financieros (CUNEF)",
+        pays: "Espagne",
+        coords: [40.45220793698348, -3.7133098769329846],
+        type: "europe-erasmus",
+        code: "E MADRID236",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid – Universidad Europea de Madrid (UEM)",
+        pays: "Espagne",
+        coords: [40.3850912946297, -3.9173661888338134],
+        type: "europe-erasmus",
+        code: "E MADRID18",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid – Universidad Francisco de Vitoria (UFV)",
+        pays: "Espagne",
+        coords: [40.440053432728234, -3.8339778625669196],
+        type: "europe-erasmus",
+        code: "E MADRID28",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid – Universidad Pontificia Comillas (ICADE)",
+        pays: "Espagne",
+        coords: [40.4297963040217, -3.711184964417922],
+        type: "europe-erasmus",
+        code: "E MADRID02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Madrid ou Ségovie – IE University",
+        pays: "Espagne",
+        coords: [40.953087773201354, -4.118809577910343],
+        type: "europe-erasmus",
+        code: "E SEGOVIA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Salamanque – Universidad Pontificia de Salamanca (UPSA)",
+        pays: "Espagne",
+        coords: [40.96333774174776, -5.666839662566892],
+        type: "europe-erasmus",
+        code: "E SALAMAN01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Saragosse – Universidad de Zaragoza (UNIZAR)",
+        pays: "Espagne",
+        coords: [41.64216804686975, -0.9014904499458832],
+        type: "europe-erasmus",
+        code: "E ZARAGOZ01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Séville – Universidad Loyola",
+        pays: "Espagne",
+        coords: [37.30672599970538, -5.9425085038325625],
+        type: "europe-erasmus",
+        code: "E CORDOBA23",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Valence – CEU Cardenal Herrera",
+        pays: "Espagne",
+        coords: [39.54750913128188, -0.3868335485859254],
+        type: "europe-erasmus",
+        code: "E VALENCI08",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Valence – UVC San Vicente Martir",
+        pays: "Espagne",
+        coords: [39.47065410761906, -0.3804553712444997],
+        type: "europe-erasmus",
+        code: "E VALENCI11",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Valence – Universidad de Valencia (UV)",
+        pays: "Espagne",
+        coords: [39.480253430495196, -0.36344297317591895],
+        type: "europe-erasmus",
+        code: "E VALENCI01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Valence – Universidad Europea de Valencia (UEV)",
+        pays: "Espagne",
+        coords: [39.475595811969754, -0.36525852982138024],
+        type: "europe-erasmus",
+        code: "E VALENCI91",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Valence – Universitat Politecnica Valencia (UPV)",
+        pays: "Espagne",
+        coords: [39.48089165496956, -0.34112267200148083],
+        type: "europe-erasmus",
+        code: "E VALENCI02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Tallin – Estonian Business School",
+        pays: "Estonie",
+        coords: [59.432241865268985, 24.756767964417662],
+        type: "europe-erasmus",
+        code: "EE TALLINN02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Helsinki – University of Helsinki – Helsingi Yliopisto",
+        pays: "Finlande",
+        coords: [60.1717991587975, 24.948984182817178],
+        type: "europe-erasmus",
+        code: "SF HELSINK01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Vaasa – University of Vaasa",
+        pays: "Finlande",
+        coords: [63.10502946719993, 21.593409329496946],
+        type: "europe-erasmus",
+        code: "SF VAASA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Athènes – Athens University of Economics Business (AUEB)",
+        pays: "Grèce",
+        coords: [37.99426506292274, 23.732205480179843],
+        type: "europe-erasmus",
+        code: "G ATHINE04",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Budapest – Budapest Business University (BBU) – Faculty of Finance and Accounting (FFA)",
+        pays: "Hongrie",
+        coords: [47.512839482083386, 19.048708042904046],
+        type: "europe-erasmus",
+        code: "HU BUDAPES20",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Budapest – Budapest Business University (BBU) – Faculty of international Management Business (FIMB)",
+        pays: "Hongrie",
+        coords: [47.51237393071293, 19.20215513382537],
+        type: "europe-erasmus",
+        code: "HU BUDAPES20",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Budapest – Budapest University of Technology and Economics (BME)",
+        pays: "Hongrie",
+        coords: [47.48143124921301, 19.055489078013448],
+        type: "europe-erasmus",
+        code: "HU BUDAPES02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Budapest – IBS",
+        pays: "Hongrie",
+        coords: [47.48843148773898, 19.07196320465165],
+        type: "europe-erasmus",
+        code: "?????????",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Pécs – University of Pécs",
+        pays: "Hongrie",
+        coords: [46.07576052706316, 18.237581715475827],
+        type: "europe-erasmus",
+        code: "?????????",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Cagliari – Universita degli Studi di Cagliari",
+        pays: "Italie",
+        coords: [39.21782578445262, 9.114929437489604],
+        type: "europe-erasmus",
+        code: "I CAGLIAR01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Florence – Universita degli Studi di Firenze",
+        pays: "Italie",
+        coords: [43.80063846147205, 11.245236396634485],
+        type: "europe-erasmus",
+        code: "I FIRENZE01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Milan – Politecnico",
+        pays: "Italie",
+        coords: [45.47966644748503, 9.228205878732439],
+        type: "europe-erasmus",
+        code: "I MILANO02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Milan – Universita Cattolica del Sacro Cuore (UCSC)",
+        pays: "Italie",
+        coords: [45.46270670987958, 9.176753111483373],
+        type: "europe-erasmus",
+        code: "I MILANO03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Modène – Unimore",
+        pays: "Italie",
+        coords: [44.64608651956276, 10.929476022462497],
+        type: "europe-erasmus",
+        code: "I MODENA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Naples – Parthenope",
+        pays: "Italie",
+        coords: [40.83777803672144, 14.254971750203481],
+        type: "europe-erasmus",
+        code: "I NAPOLI03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Piacenza – Universita Cattolica del Sacro Cuore",
+        pays: "Italie",
+        coords: [45.04204692870517, 9.738191511386502],
+        type: "europe-erasmus",
+        code: "I MILANO03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Rimini – Universita degli Studi di Bologna",
+        pays: "Italie",
+        coords: [44.062819096263105, 12.565382122811137],
+        type: "europe-erasmus",
+        code: "I BOLOGNA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Rome – Libera Universita Maria Ss. Assunta (LUMSA)",
+        pays: "Italie",
+        coords: [41.90340645350857, 12.46262803659784],
+        type: "europe-erasmus",
+        code: "I ROMA04",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Riga – Stockholm School of Economics (SSE)",
+        pays: "Lettonie",
+        coords: [56.95928684322769, 24.107571244092835],
+        type: "europe-erasmus",
+        code: "LV RIGA14",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Klaipeda – LCC International University",
+        pays: "Lituanie",
+        coords: [55.7311910970205, 21.133208647204942],
+        type: "europe-erasmus",
+        code: "LT KLAIPED02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Vilnius – Vilnius University Business School (VUBS)",
+        pays: "Lituanie",
+        coords: [54.724982270686816, 25.336161106678638],
+        type: "europe-erasmus",
+        code: "LT VILNIUS02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Skopje – University American College Skopje (UACS)",
+        pays: "Macédoine du Nord",
+        coords: [41.981516463759064, 21.454855128968397],
+        type: "europe-erasmus",
+        code: "MK SKOPJE10",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Stavanger – University of Stavanger",
+        pays: "Norvège",
+        coords: [58.9373847531535, 5.697227865305395],
+        type: "europe-erasmus",
+        code: "N STAVANG01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Trondheim – NTNU",
+        pays: "Norvège",
+        coords: [63.41961921813933, 10.402364044818626],
+        type: "europe-erasmus",
+        code: "N TRONDHE01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Arnhem – Han University of Applied Sciences",
+        pays: "Pays-Bas",
+        coords: [51.998588559002876, 5.947686918527335],
+        type: "europe-erasmus",
+        code: "NL ARNHEM27",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Breda – Avans University of Applied Sciences",
+        pays: "Pays-Bas",
+        coords: [51.5847094634279, 4.7986688056206],
+        type: "europe-erasmus",
+        code: "NL BREDA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Fontys – Eindhoven",
+        pays: "Pays-Bas",
+        coords: [51.45643614048295, 5.479061065978148],
+        type: "europe-erasmus",
+        code: "NL EINDHOV03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Katowice – University of Economics in Katowice",
+        pays: "Pologne",
+        coords: [50.258581815174374, 19.0450492499546],
+        type: "europe-erasmus",
+        code: "PL KATOWIC02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Varsovie – Kozminski University",
+        pays: "Pologne",
+        coords: [52.271750712412754, 21.014517545545747],
+        type: "europe-erasmus",
+        code: "PL WARSZAW21",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Varsovie – Warsaw School of Economics (SGH)",
+        pays: "Pologne",
+        coords: [52.209071974656936, 21.008763536658734],
+        type: "europe-erasmus",
+        code: "PL WARSZAW03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Varsovie – Warsaw University of Life Science (SGGW)",
+        pays: "Pologne",
+        coords: [52.163733322185905, 21.046685948794426],
+        type: "europe-erasmus",
+        code: "PL WARSZAW05",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Wroclaw – Wroclaw University of Economics and Business (WUEB)",
+        pays: "Pologne",
+        coords: [51.091823622171844, 17.021985863222977],
+        type: "europe-erasmus",
+        code: "PL WROCLAW03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Ponta Delgada – Universidade dos Açores",
+        pays: "Portugal",
+        coords: [37.74699861003658, -25.664139613637364],
+        type: "europe-erasmus",
+        code: "P ACORES01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Porto – Instituto Politecnico Porto (ISCAP)",
+        pays: "Portugal",
+        coords: [41.200457334309256, -8.6009310947234],
+        type: "europe-erasmus",
+        code: "P PORTO05",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Porto – Universidade Catolica Portuguesa (UCP)",
+        pays: "Portugal",
+        coords: [41.15396589062326, -8.670288633014252],
+        type: "europe-erasmus",
+        code: "?????????",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Pilsen – University of West Bohemia",
+        pays: "République Tchèque",
+        coords: [49.723873512732496, 13.351784686772632],
+        type: "europe-erasmus",
+        code: "CZ PLZEN01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Prague – Czech University of Life Sciences",
+        pays: "République Tchèque",
+        coords: [50.130152158331775, 14.374145067208156],
+        type: "europe-erasmus",
+        code: "CZ PRAHA02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Prague – Metropolitan University Prague (MUP)",
+        pays: "République Tchèque",
+        coords: [50.07002049358724, 14.500713349668189],
+        type: "europe-erasmus",
+        code: "CZ PRAHA18",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Bucarest – Bucarest University of Economic Studies",
+        pays: "Roumanie",
+        coords: [44.44765945172905, 26.097964426939914],
+        type: "europe-erasmus",
+        code: "RO BUCURES04",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Cambridge – Anglia Ruskin University (ARU)",
+        pays: "Royaume-Uni",
+        coords: [52.20337892598825, 0.1343618372039],
+        type: "europe-erasmus",
+        code: "UK CHELMSF01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Canterbury – Canterbury Christ Church University",
+        pays: "Royaume-Uni",
+        coords: [51.27968388279319, 1.0899187120075373],
+        type: "europe-erasmus",
+        code: "UK CANTERB03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Coventry – University of Warwick",
+        pays: "Royaume-Uni",
+        coords: [52.37939655474268, -1.5607730289507258],
+        type: "europe-erasmus",
+        code: "UK COVENTR01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Glasgow – University of Glasgow",
+        pays: "Royaume-Uni",
+        coords: [55.872463146625385, -4.289293299883843],
+        type: "europe-erasmus",
+        code: "UK GLASGOW01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Hertfordshire – University of Hertfordshire",
+        pays: "Royaume-Uni",
+        coords: [51.75206127072443, -0.2390042064405293],
+        type: "europe-erasmus",
+        code: "UK HATFIEL01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Leeds – University of Leeds",
+        pays: "Royaume-Uni",
+        coords: [53.80811364893606, -1.5529691227609483],
+        type: "europe-erasmus",
+        code: "UK LEEDS01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Liverpool – Liverpool Hope University (LHU)",
+        pays: "Royaume-Uni",
+        coords: [53.393770170891216, -2.890405451119976],
+        type: "europe-erasmus",
+        code: "UK LIVERPO06",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Liverpool – Liverpool John Moores University (LJMU)",
+        pays: "Royaume-Uni",
+        coords: [53.40691166425657, -2.9743370087356675],
+        type: "europe-erasmus",
+        code: "UK LIVERPO02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Londres – Queen Mary University of London (QMUL)",
+        pays: "Royaume-Uni",
+        coords: [51.52573470086205, -0.039330687472567905],
+        type: "europe-erasmus",
+        code: "UK LONDON031",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Londres – University of Greenwich",
+        pays: "Royaume-Uni",
+        coords: [51.48309347329154, -0.005841132706514597],
+        type: "europe-erasmus",
+        code: "UK LONDON110",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Loughborough – Loughborough University",
+        pays: "Royaume-Uni",
+        coords: [52.765116158076005, -1.231682707486802],
+        type: "europe-erasmus",
+        code: "UK LOUGHBO01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Nottingham – Nottingham Trent University (NTU)",
+        pays: "Royaume-Uni",
+        coords: [52.95830511072391, -1.1537391767894811],
+        type: "europe-erasmus",
+        code: "UK NOTTING02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Bratislava – Comenius University – Faculty of Management",
+        pays: "Slovaquie",
+        coords: [48.16002898464336, 17.13377092400736],
+        type: "europe-erasmus",
+        code: "SK BRATISL02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Kosice – Technical University of Kosice (TUKE)",
+        pays: "Slovaquie",
+        coords: [48.73100517755098, 21.247038912915535],
+        type: "europe-erasmus",
+        code: "SK KOSICE03",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Maribor – University of Maribor",
+        pays: "Slovénie",
+        coords: [46.5592991378094, 15.644205874388627],
+        type: "europe-erasmus",
+        code: "SI MARIBOR01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Karlstad – Karlstad University",
+        pays: "Suède",
+        coords: [59.40648088041132, 13.582899133444156],
+        type: "europe-erasmus",
+        code: "S KARLSTA01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Istanbul Aydin University",
+        pays: "Turquie",
+        coords: [40.990638046048964, 28.79721474024514],
+        type: "europe-erasmus",
+        code: "TR ISTANBU25",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Istanbul Commerce University (Ticaret)",
+        pays: "Turquie",
+        coords: [41.059550214186025, 28.95998677061736],
+        type: "europe-erasmus",
+        code: "TR ISTANBU10",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Istanbul Medipol University",
+        pays: "Turquie",
+        coords: [41.10292628025562, 29.13231926809256],
+        type: "europe-erasmus",
+        code: "TR ISTANBU36",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Koç University",
+        pays: "Turquie",
+        coords: [41.20562369583318, 29.072980124364868],
+        type: "europe-erasmus",
+        code: "TR ISTANBU17",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Marmara University",
+        pays: "Turquie",
+        coords: [40.989635758006635, 29.053007724625274],
+        type: "europe-erasmus",
+        code: "TR ISTANBU05",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Istanbul – Université Galatasaray",
+        pays: "Turquie",
+        coords: [41.04618386713174, 29.01996416908362],
+        type: "europe-erasmus",
+        code: "TR ISTANBU02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Izmir – Dokuz Eylul University",
+        pays: "Turquie",
+        coords: [38.43079182633378, 27.13731696285376],
+        type: "europe-erasmus",
+        code: "TR IZMIR01",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Fribourg – Haute École de Gestion de HES-SO",
+        pays: "Suisse",
+        coords: [46.793680076455566, 7.156374216529184],
+        type: "europe-hors-erasmus",
+        code: "CH DELEMON02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Genève – Haute École de Gestion (HEG)",
+        pays: "Suisse",
+        coords: [46.175650296515535, 6.13982136272222],
+        type: "europe-hors-erasmus",
+        code: "GENEVE02",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+    {
+        nom: "Lucerne – Hochschule Luzern – Wirtschaft",
+        pays: "Suisse",
+        coords: [47.04920094652563, 8.310081649829328],
+        type: "europe-hors-erasmus",
+        code: "CHLUZERN14",
+        budget: "",
+        integration: "",
+        cours: "",
+        examens: "",
+        logement: "",
+        transport: "",
+        tips: "",
+    },
+];
+
+/* ─────────────────────────────
+   MAP INIT
+───────────────────────────── */
+const initialView = { coords: [30, 10], zoom: 3 };
+const map = L.map('map', { zoomControl: false }).setView(initialView.coords, initialView.zoom);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© CartoDB',
+    maxZoom: 19
+}).addTo(map);
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+/* ─────────────────────────────
+   PIN FACTORY
+───────────────────────────── */
+function makeIcon(type) {
+    return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div class="pin-wrap pin-${type}"><div class="pin-shape"></div></div>`,
+        iconSize: [26, 32],
+        iconAnchor: [13, 32],
+        popupAnchor: [0, -32]
+    });
+}
+
+/* ─────────────────────────────
+   ADD MARKERS
+───────────────────────────── */
+let counts = { 'europe-erasmus': 0, 'europe-hors-erasmus': 0, 'hors-europe': 0 };
+const markers = [];
+
+universites.forEach(uni => {
+    if (!uni.coords || uni.coords.length !== 2) return;
+    counts[uni.type] = (counts[uni.type] || 0) + 1;
+
+    const marker = L.marker(uni.coords, { icon: makeIcon(uni.type) }).addTo(map);
+    markers.push({ marker, uni });
+    marker.bindTooltip(uni.nom, { direction: 'top', offset: [0, -30], className: 'leaflet-tooltip-custom' });
+    marker.on('click', () => {
+        map.flyTo(uni.coords, 13, { duration: 1.4 });
+        showPanel(uni);
+    });
+});
+
+// Update counter
+document.getElementById('count-total').textContent = universites.length;
+document.getElementById('count-erasmus').textContent = counts['europe-erasmus'] || 0;
+document.getElementById('count-hors').textContent = counts['europe-hors-erasmus'] || 0;
+document.getElementById('count-monde').textContent = counts['hors-europe'] || 0;
+
+/* ─────────────────────────────
+   PANEL LOGIC
+───────────────────────────── */
+const panel = document.getElementById('panel');
+
+function val(v) {
+    return v ? `<span class="info-card-value">${v}</span>`
+             : `<span class="info-card-value empty">Non renseigné</span>`;
+}
+
+function badgeClass(type) {
+    if (type === 'europe-hors-erasmus') return 'badge-hors-erasmus';
+    if (type === 'hors-europe') return 'badge-monde';
+    return 'badge-erasmus';
+}
+function badgeLabel(type) {
+    if (type === 'europe-hors-erasmus') return 'Europe – Hors Erasmus';
+    if (type === 'hors-europe') return 'Hors Europe';
+    return 'Europe – Erasmus';
+}
+
+/* FILTRES */
+let activeFilter = 'all';
+
+/* RECHERCHE */
+const searchInput   = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (q.length < 2) { searchResults.style.display = 'none'; return; }
+    const matches = universites.filter(u =>
+        u.nom.toLowerCase().includes(q) || u.pays.toLowerCase().includes(q)
+    ).slice(0, 8);
+    if (matches.length === 0) { searchResults.style.display = 'none'; return; }
+    searchResults.innerHTML = matches.map(u => `
+        <div class="search-item" onclick="selectResult(${universites.indexOf(u)})">
+            <div>${u.nom}</div>
+            <div class="search-item-pays">${u.pays}</div>
+        </div>
+    `).join('');
+    searchResults.style.display = 'block';
+});
+
+function selectResult(index) {
+    const uni = universites[index];
+    searchInput.value = uni.nom;
+    searchResults.style.display = 'none';
+    if (activeFilter !== 'all' && activeFilter !== uni.type) { setFilter('all'); }
+    map.flyTo(uni.coords, 13, { duration: 1.4 });
+    showPanel(uni);
+}
+
+document.addEventListener('click', e => {
+    if (!document.getElementById('search-wrap').contains(e.target)) {
+        searchResults.style.display = 'none';
+    }
+});
+
+function showPanel(uni) {
+    const content = document.getElementById('content');
+    content.innerHTML = `
+        <span class="panel-badge ${badgeClass(uni.type)}">${badgeLabel(uni.type)}</span>
+        <h2 class="panel-title">${uni.nom}</h2>
+        <p class="panel-code">${uni.pays || ''}${uni.code ? ' &nbsp;·&nbsp; ' + uni.code : ''}</p>
+
+        <div class="info-grid">
+            <div class="info-card card-gray">
+                <div class="info-card-label label-gray">📋 Verdict global</div>
+                ${val(uni.verdict)}
+            </div>
+            <div class="info-card card-blue">
+                <div class="info-card-label label-blue">💰 Budget</div>
+                ${val(uni.budget)}
+            </div>
+            <div class="info-card card-purple">
+                <div class="info-card-label label-purple">🤝 Intégration</div>
+                ${val(uni.integration)}
+            </div>
+            <div class="info-card card-green">
+                <div class="info-card-label label-green">📚 Cours</div>
+                ${val(uni.cours)}
+            </div>
+            <div class="info-card card-orange">
+                <div class="info-card-label label-orange">📝 Examens</div>
+                ${val(uni.examens)}
+            </div>
+            <div class="info-card card-indigo">
+                <div class="info-card-label label-indigo">🏠 Logement</div>
+                ${val(uni.logement)}
+            </div>
+            <div class="info-card card-cyan">
+                <div class="info-card-label label-cyan">🚌 Transports</div>
+                ${val(uni.transport)}
+            </div>
+            <div class="info-card card-amber">
+                <div class="info-card-label label-amber">💡 Bon à savoir</div>
+                ${val(uni.tips)}
+            </div>
+        </div>
+    `;
+
+    panel.style.width = '440px';
+    panel.classList.add('open');
+}
+
+function closePanel() {
+    panel.classList.remove('open');
+    setTimeout(() => { panel.style.width = '0'; }, 450);
+    map.flyTo(initialView.coords, initialView.zoom, { duration: 1.2 });
+}
+
+function setFilter(type) {
+    activeFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    const btnClass = { 'all': 'all', 'europe-erasmus': 'erasmus', 'europe-hors-erasmus': 'hors-era', 'hors-europe': 'monde' };
+    document.querySelector(`.filter-btn.${btnClass[type]}`).classList.add('active');
+    markers.forEach(({ marker, uni }) => {
+        if (type === 'all' || uni.type === type) { marker.addTo(map); }
+        else { marker.remove(); }
+    });
+    closePanel();
+}
+</script>
+</body>
+</html>
