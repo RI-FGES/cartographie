@@ -180,3 +180,87 @@ body { font-family: 'DM Sans', sans-serif; background: #e8edf2; }
     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 }
 .leaflet-tooltip-custom::before { display: none; }
+
+/* ── RESPONSIVE TABLETTE (max 1024px) ── */
+@media (max-width: 1024px) {
+
+    #toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        max-width: calc(100vw - 40px);
+    }
+
+    #search-input {
+        width: 100%;
+    }
+
+    #search-wrap {
+        width: 100%;
+    }
+
+    #filters {
+        flex-wrap: wrap;
+    }
+
+    #panel-inner {
+        width: 380px;
+    }
+}
+
+/* ── RESPONSIVE MOBILE (max 640px) ── */
+@media (max-width: 640px) {
+
+    /* Toolbar compact en haut */
+    #toolbar {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        max-width: calc(100vw - 20px);
+    }
+
+    #search-input {
+        width: 100%;
+        font-size: 14px;
+    }
+
+    /* Boutons filtres plus petits */
+    .filter-btn {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+
+    /* Panneau latéral → panneau bas sur mobile */
+    #panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        height: 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.12);
+        transition: height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #panel.open {
+        height: 75vh;
+    }
+
+    #panel-inner {
+        width: 100%;
+        padding: 24px 20px 40px;
+        transform: translateY(20px);
+        opacity: 0;
+        transition: opacity 0.3s ease 0.15s, transform 0.3s ease 0.15s;
+    }
+
+    #panel.open #panel-inner {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .panel-title {
+        font-size: 20px;
+    }
+}
