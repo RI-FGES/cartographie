@@ -114,7 +114,7 @@ body { font-family: 'DM Sans', sans-serif; background: #e8edf2; }
     align-items: center;
     gap: 6px;
 }
-.info-card-value { font-size: 13.5px; color: var(--text-1); line-height: 1.55; }
+.info-card-value { font-size: 13.5px; color: var(--text-1); line-height: 1.55; white-space: pre-line; }
 .info-card-value.empty { color: var(--text-3); font-style: italic; }
 
 /* Variantes de couleur des cartes */
