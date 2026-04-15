@@ -302,8 +302,9 @@
         <option value="M1 M2 MRC">M1 M2 MRC</option>
     </select>
     <span id="formation-arrow">▼</span>
-    </div>
 </div>
+
+<div id="formation-warning">⚠️ Rappel : départ au S1 uniquement pour les Prépa 3 Gestion ⚠️</div>
 
 <!-- Side panel -->
 <div id="panel">
@@ -4156,6 +4157,12 @@ function setFilter(type) {
 
 function setFormation(formation) {
     activeFormation = formation;
+    const warning = document.getElementById('formation-warning');
+    if (formation === "Prépa 3 Gestion") {
+        warning.style.display = 'block';
+    } else {
+        warning.style.display = 'none';
+    }
     applyFilters();
 }
 
