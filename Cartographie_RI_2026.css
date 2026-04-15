@@ -266,8 +266,6 @@ body { font-family: 'DM Sans', sans-serif; background: #e8edf2; }
 }
 
 #formation-warning {
-    display: none; /* Toujours piloté par le JS */
-    margin-top: 15px;
     background: #FEE2E2;
     border: 1px solid #FECACA;
     border-radius: 12px;
@@ -275,12 +273,9 @@ body { font-family: 'DM Sans', sans-serif; background: #e8edf2; }
     font-size: 13px;
     font-weight: 600;
     color: #B91C1C;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    
-    /* Ces propriétés permettent de le mettre au milieu en dessous */
-    flex-basis: 100%;       /* Force le message à prendre toute la largeur et donc à passer à la ligne */
-    max-width: fit-content; /* Le cadre s'adapte à la taille du texte */
-    margin-left: auto;      /* Centre le bloc horizontalement */
-    margin-right: auto;     /* Centre le bloc horizontalement */
+    margin: 15px auto;
     text-align: center;
+    flex-basis: 100%;
+    max-width: fit-content;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
